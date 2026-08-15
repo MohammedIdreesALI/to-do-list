@@ -1,6 +1,7 @@
 ﻿const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const db = require('./db.js');
 
 const PORT = process.env.PORT || 5000;
@@ -38,6 +39,18 @@ function sendJSON(res, statusCode, data) {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-user-id'
   });
   res.end(JSON.stringify(data));
+}
+
+function getNetworkIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
 }
 
 const server = http.createServer(async (req, res) => {
@@ -185,8 +198,14 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`\n🚀 TaskFlow Pro SQL Backend Server is running!`);
-  console.log(`📍 Web App & API: http://localhost:${PORT}/`);
-  console.log(`📊 Database: SQLite (${path.join(__dirname, 'taskflow.db')})\n`);
+const networkIp = getNetworkIp();
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n======================================================`);
+  console.log(`🚀 TaskFlow Pro SQL Database & Server is RUNNING!`);
+  console.log(`======================================================`);
+  console.log(`💻 On this Computer:   http://localhost:${PORT}/`);
+  console.log(`📱 On Another Device:  http://${networkIp}:${PORT}/`);
+  console.log(`📊 SQL Database:       ${path.join(__dirname, 'taskflow.db')}`);
+  console.log(`======================================================\n`);
 });
