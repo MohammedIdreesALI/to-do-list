@@ -910,6 +910,10 @@ class UIManager {
     this.dataDialog = document.getElementById('data-dialog');
     this.dataCloseBtn = document.getElementById('data-close-btn');
     this.dataDoneBtn = document.getElementById('data-done-btn');
+    this.quickSyncBtn = document.getElementById('quick-sync-btn');
+    this.copySyncCodeBtn = document.getElementById('copy-sync-code-btn');
+    this.pasteSyncCodeInput = document.getElementById('paste-sync-code-input');
+    this.applySyncCodeBtn = document.getElementById('apply-sync-code-btn');
     this.exportJsonBtn = document.getElementById('export-json-btn');
     this.exportCsvBtn = document.getElementById('export-csv-btn');
     this.importJsonInput = document.getElementById('import-json-input');
@@ -1346,6 +1350,15 @@ class UIManager {
     this.dataDoneBtn.addEventListener('click', () => this.dataDialog.close());
     this.footerBackupBtn.addEventListener('click', () => this.dataDialog.showModal());
 
+    if (this.quickSyncBtn) {
+      this.quickSyncBtn.addEventListener('click', () => this.dataDialog.showModal());
+    }
+    if (this.copySyncCodeBtn) {
+      this.copySyncCodeBtn.addEventListener('click', () => this.copySyncCode());
+    }
+    if (this.applySyncCodeBtn) {
+      this.applySyncCodeBtn.addEventListener('click', () => this.applySyncCode());
+    }
     this.exportJsonBtn.addEventListener('click', () => this.exportTasksJSON());
     this.exportCsvBtn.addEventListener('click', () => this.exportTasksCSV());
     this.importJsonInput.addEventListener('change', (e) => this.importTasksJSON(e));
@@ -1954,6 +1967,75 @@ class UIManager {
       toast.style.transition = 'all 0.3s ease';
       setTimeout(() => toast.remove(), 300);
     }, allowUndo ? 5000 : 3000);
+  }
+
+  
+  copySyncCode() {
+    const user = AuthManager.getActiveUser();
+    const payload = {
+      user: { name: user.name, email: user.email, id: user.id },
+      tasks: this.state.tasks,
+      xp: StorageManager.getXP(),
+      customCategories: this.state.customCategories,
+      timestamp: Date.now()
+    };
+    try {
+      const jsonStr = JSON.stringify(payload);
+      const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
+      navigator.clipboard.writeText(encoded).then(() => {
+        this.showToast('📋 Sync Key copied to clipboard! Paste it on your phone.');
+      }).catch(() => {
+        prompt('Copy this Sync Key manually:', encoded);
+      });
+    } catch (e) {
+      this.showToast('Could not generate Sync Key');
+    }
+  }
+
+  applySyncCode() {
+    const raw = this.pasteSyncCodeInput.value.trim();
+    if (!raw) {
+      this.showToast('Please paste a Sync Key first');
+      return;
+    }
+    try {
+      const jsonStr = decodeURIComponent(escape(atob(raw)));
+      const data = JSON.parse(jsonStr);
+
+      if (data && Array.isArray(data.tasks)) {
+        if (data.user && !data.user.isGuest) {
+          AuthManager.setActiveSession(data.user);
+          const users = AuthManager.getUsers();
+          if (!users.some(u => u.email === data.user.email)) {
+            users.push(data.user);
+            localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
+          }
+        }
+
+        this.state.tasks = data.tasks;
+        this.state.save();
+
+        if (data.xp !== undefined) {
+          StorageManager.setXP(data.xp);
+        }
+        if (Array.isArray(data.customCategories)) {
+          this.state.customCategories = data.customCategories;
+          StorageManager.saveCustomCategories(data.customCategories);
+        }
+
+        this.updateUserUI();
+        this.initGamification();
+        this.render();
+        this.pasteSyncCodeInput.value = '';
+        this.dataDialog.close();
+        ConfettiEngine.fire(80);
+        this.showToast(`🎉 Synced ${data.tasks.length} tasks successfully!`);
+      } else {
+        alert('Invalid Sync Key format.');
+      }
+    } catch (err) {
+      alert('Could not decode Sync Key. Please ensure you copied the full key.');
+    }
   }
 
   exportTasksJSON() {

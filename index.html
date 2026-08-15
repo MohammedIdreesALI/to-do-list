@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=3.0.0">
+  <link rel="stylesheet" href="style.css?v=3.1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -58,7 +58,8 @@
         </button>
 
         <!-- Data & Backup -->
-        <button type="button" class="icon-btn" id="data-btn" data-tooltip="Backup & Export" aria-label="Backup">
+        <button type="button" class="icon-btn" id="quick-sync-btn" title="Sync between Laptop & Phone" style="display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; font-weight:600; padding:0.4rem 0.75rem; border-radius:999px; background:var(--bg-card); border:1px solid var(--border-color); color:var(--text-main);"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg><span>Sync</span></button>
+          <button type="button" class="icon-btn" id="data-btn" data-tooltip="Backup & Export" aria-label="Backup">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         </button>
 
@@ -519,6 +520,23 @@
           Your data is automatically synced to the cloud and cached locally for full offline resilience.
         </p>
 
+        
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem; margin-bottom: 0.85rem;">
+          <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+            📱 Instant Cross-Device Sync Key
+          </h4>
+          <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.6rem;">
+            Transfer all your tasks between Laptop and Phone in 1 second without any server setup.
+          </p>
+          <button type="button" class="btn-primary" id="copy-sync-code-btn" style="width: 100%; margin-bottom: 0.5rem;">
+            📋 Copy Sync Key to Clipboard
+          </button>
+          <div style="display: flex; gap: 0.4rem;">
+            <input type="text" id="paste-sync-code-input" placeholder="Paste Sync Key on phone..." style="flex: 1; padding: 0.45rem 0.65rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.8rem; background: var(--bg-app); color: var(--text-main);">
+            <button type="button" class="btn-secondary" id="apply-sync-code-btn">Import</button>
+          </div>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 0.5rem;">
           <button type="button" class="btn-primary" id="export-json-btn" style="width: 100%;">Export Full Backup (JSON)</button>
           <button type="button" class="btn-secondary" id="export-csv-btn" style="width: 100%;">Export Spreadsheet (CSV)</button>
@@ -533,6 +551,6 @@
   </dialog>
 
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
-  <script src="app.js?v=3.0.0"></script>
+  <script src="app.js?v=3.1.0"></script>
 </body>
 </html>
