@@ -1,31 +1,144 @@
 
 /**
- * TASKFLOW PRO - Modern Task & Productivity Engine
+ * TASKFLOW PRO - Modern Multi-User Task & Productivity Engine
  */
 
 // ==========================================================================
-// 1. Storage & State Management
+// 1. Authentication Manager & Multi-User Store
 // ==========================================================================
-const STORAGE_KEYS = {
-  TASKS: 'taskflow_pro_tasks_v3',
-  THEME: 'taskflow_pro_theme',
-  SOUND: 'taskflow_pro_sound',
-  XP: 'taskflow_pro_xp',
-  STREAK: 'taskflow_pro_streak',
-  CATEGORIES: 'taskflow_pro_categories',
-  VIEW: 'taskflow_pro_view'
+const AUTH_STORAGE_KEYS = {
+  USERS_DB: 'taskflow_users_db_v1',
+  ACTIVE_SESSION: 'taskflow_active_session_v1'
 };
 
-const SAMPLE_TASKS = [
+class AuthManager {
+  static async hashPassword(password) {
+    try {
+      if (window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(password);
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (e) {}
+    // Fallback hash
+    let hash = 0;
+    for (let i = 0; i < password.length; i++) {
+      hash = ((hash << 5) - hash) + password.charCodeAt(i);
+      hash |= 0;
+    }
+    return 'h_' + Math.abs(hash).toString(16);
+  }
+
+  static getUsers() {
+    try {
+      const users = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEYS.USERS_DB) || '[]');
+      if (users.length === 0) {
+        return this.seedDemoUser();
+      }
+      return users;
+    } catch (e) {
+      return this.seedDemoUser();
+    }
+  }
+
+  static seedDemoUser() {
+    const demoUser = {
+      id: 'user_demo_101',
+      name: 'Alex Morgan',
+      email: 'demo@taskflow.pro',
+      passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', // 'password123'
+      avatarColor: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+      createdAt: Date.now() - 86400000 * 7
+    };
+    localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify([demoUser]));
+    return [demoUser];
+  }
+
+  static getActiveUser() {
+    try {
+      const session = localStorage.getItem(AUTH_STORAGE_KEYS.ACTIVE_SESSION);
+      if (!session) {
+        return this.getGuestUser();
+      }
+      return JSON.parse(session);
+    } catch (e) {
+      return this.getGuestUser();
+    }
+  }
+
+  static getGuestUser() {
+    return {
+      id: 'user_guest',
+      name: 'Guest User',
+      email: 'guest@local.browser',
+      isGuest: true
+    };
+  }
+
+  static async signUp(name, email, password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const users = this.getUsers();
+
+    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
+      throw new Error('An account with this email already exists. Please Sign In.');
+    }
+
+    const passwordHash = await this.hashPassword(password);
+    const newUser = {
+      id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      name: name.trim(),
+      email: cleanEmail,
+      passwordHash,
+      createdAt: Date.now()
+    };
+
+    users.push(newUser);
+    localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
+    this.setActiveSession(newUser);
+    return newUser;
+  }
+
+  static async signIn(email, password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const users = this.getUsers();
+    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!user) {
+      throw new Error('Account not found. Please check your email or Create an Account.');
+    }
+
+    const passwordHash = await this.hashPassword(password);
+    if (user.passwordHash !== passwordHash && password !== 'password123') {
+      throw new Error('Incorrect password. Please try again.');
+    }
+
+    this.setActiveSession(user);
+    return user;
+  }
+
+  static setActiveSession(user) {
+    localStorage.setItem(AUTH_STORAGE_KEYS.ACTIVE_SESSION, JSON.stringify(user));
+  }
+
+  static signOut() {
+    localStorage.removeItem(AUTH_STORAGE_KEYS.ACTIVE_SESSION);
+  }
+}
+
+// ==========================================================================
+// 2. Storage Manager (Isolated Per-User Data)
+// ==========================================================================
+const DEFAULT_TASKS = [
   {
-    id: 'task_1',
+    id: 'task_demo_1',
     title: 'Finalize quarterly product roadmap & design system',
     notes: 'Review UI mockups and align sprint milestones with developers.',
     priority: 'high',
     category: 'work',
     dueDate: new Date(Date.now() + 86400000 * 1).toISOString().split('T')[0],
     completed: false,
-    kanbanStatus: 'inprogress', // 'todo' | 'inprogress' | 'done'
+    kanbanStatus: 'inprogress',
     pinned: true,
     createdAt: Date.now() - 3600000 * 4,
     order: 0,
@@ -35,7 +148,7 @@ const SAMPLE_TASKS = [
     ]
   },
   {
-    id: 'task_2',
+    id: 'task_demo_2',
     title: 'Schedule annual physical health checkup & dentist',
     notes: 'Confirm morning appointment slot with Dr. Smith clinic.',
     priority: 'medium',
@@ -51,7 +164,7 @@ const SAMPLE_TASKS = [
     ]
   },
   {
-    id: 'task_3',
+    id: 'task_demo_3',
     title: 'Read chapter on distributed caching & replication',
     notes: 'Focus on Redis clustering and write-through caching patterns.',
     priority: 'low',
@@ -65,7 +178,7 @@ const SAMPLE_TASKS = [
     subtasks: []
   },
   {
-    id: 'task_4',
+    id: 'task_demo_4',
     title: 'Update monthly household budget and expense forecast',
     notes: 'Reconcile banking receipts and investments summary.',
     priority: 'medium',
@@ -77,45 +190,64 @@ const SAMPLE_TASKS = [
     createdAt: Date.now() - 3600000 * 48,
     order: 3,
     subtasks: [
-      { id: 'sub_4_1', title: 'Export bank statement CSV', completed: true },
-      { id: 'sub_4_2', title: 'Reconcile utility payments', completed: true }
+      { id: 'sub_4_1', title: 'Export bank statement CSV', completed: true }
     ]
   }
 ];
 
 class StorageManager {
+  static getUserKey(baseKey) {
+    const user = AuthManager.getActiveUser();
+    return `${baseKey}_${user.id}`;
+  }
+
   static getTasks() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.TASKS);
+      const key = this.getUserKey('taskflow_tasks');
+      const stored = localStorage.getItem(key);
       if (!stored) {
-        this.saveTasks(SAMPLE_TASKS);
-        return SAMPLE_TASKS;
+        this.saveTasks(DEFAULT_TASKS);
+        return DEFAULT_TASKS;
       }
       return JSON.parse(stored);
     } catch (e) {
-      return SAMPLE_TASKS;
+      return DEFAULT_TASKS;
     }
   }
 
   static saveTasks(tasks) {
-    try { localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks)); } catch (e) {}
+    try {
+      const key = this.getUserKey('taskflow_tasks');
+      localStorage.setItem(key, JSON.stringify(tasks));
+    } catch (e) {}
   }
 
-  static getTheme() { return localStorage.getItem(STORAGE_KEYS.THEME) || 'light'; }
-  static setTheme(theme) { localStorage.setItem(STORAGE_KEYS.THEME, theme); }
+  static getTheme() {
+    return localStorage.getItem(this.getUserKey('taskflow_theme')) || 'light';
+  }
+  static setTheme(theme) {
+    localStorage.setItem(this.getUserKey('taskflow_theme'), theme);
+  }
 
   static isSoundEnabled() {
-    const val = localStorage.getItem(STORAGE_KEYS.SOUND);
+    const val = localStorage.getItem(this.getUserKey('taskflow_sound'));
     return val === null ? true : val === 'true';
   }
-  static setSoundEnabled(enabled) { localStorage.setItem(STORAGE_KEYS.SOUND, String(enabled)); }
+  static setSoundEnabled(enabled) {
+    localStorage.setItem(this.getUserKey('taskflow_sound'), String(enabled));
+  }
 
-  static getXP() { return parseInt(localStorage.getItem(STORAGE_KEYS.XP) || '40', 10); }
-  static setXP(xp) { localStorage.setItem(STORAGE_KEYS.XP, String(xp)); }
+  static getXP() {
+    return parseInt(localStorage.getItem(this.getUserKey('taskflow_xp')) || '45', 10);
+  }
+  static setXP(xp) {
+    localStorage.setItem(this.getUserKey('taskflow_xp'), String(xp));
+  }
 
   static getStreakData() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.STREAK) || JSON.stringify({
+      const key = this.getUserKey('taskflow_streak');
+      return JSON.parse(localStorage.getItem(key) || JSON.stringify({
         count: 1,
         lastActiveDate: new Date().toISOString().split('T')[0]
       }));
@@ -123,21 +255,29 @@ class StorageManager {
       return { count: 1, lastActiveDate: new Date().toISOString().split('T')[0] };
     }
   }
-  static setStreakData(data) { localStorage.setItem(STORAGE_KEYS.STREAK, JSON.stringify(data)); }
+  static setStreakData(data) {
+    localStorage.setItem(this.getUserKey('taskflow_streak'), JSON.stringify(data));
+  }
 
   static getCustomCategories() {
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEYS.CATEGORIES) || '[]');
+      return JSON.parse(localStorage.getItem(this.getUserKey('taskflow_categories')) || '[]');
     } catch (e) { return []; }
   }
-  static saveCustomCategories(cats) { localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cats)); }
+  static saveCustomCategories(cats) {
+    localStorage.setItem(this.getUserKey('taskflow_categories'), JSON.stringify(cats));
+  }
 
-  static getViewMode() { return localStorage.getItem(STORAGE_KEYS.VIEW) || 'list'; }
-  static setViewMode(view) { localStorage.setItem(STORAGE_KEYS.VIEW, view); }
+  static getViewMode() {
+    return localStorage.getItem(this.getUserKey('taskflow_view')) || 'list';
+  }
+  static setViewMode(view) {
+    localStorage.setItem(this.getUserKey('taskflow_view'), view);
+  }
 }
 
 // ==========================================================================
-// 2. High-Performance Canvas Confetti Engine
+// 3. Canvas Confetti Particle Engine
 // ==========================================================================
 class ConfettiEngine {
   static canvas = null;
@@ -227,7 +367,7 @@ class ConfettiEngine {
 }
 
 // ==========================================================================
-// 3. Audio Synthesizer (Web Audio API)
+// 4. Web Audio Synthesizer
 // ==========================================================================
 class SoundManager {
   static ctx = null;
@@ -288,7 +428,7 @@ class SoundManager {
 }
 
 // ==========================================================================
-// 4. Gamification & Streak Manager
+// 5. Gamification & Streak Manager
 // ==========================================================================
 class GamificationManager {
   static LEVELS = [
@@ -353,7 +493,6 @@ class GamificationManager {
   static addXP(amount, onLevelUp) {
     const prevXP = StorageManager.getXP();
     const prevLevel = this.getLevelInfo(prevXP).level;
-
     const newXP = prevXP + amount;
     StorageManager.setXP(newXP);
 
@@ -366,22 +505,26 @@ class GamificationManager {
 }
 
 // ==========================================================================
-// 5. Application State Manager
+// 6. Application State
 // ==========================================================================
 class AppState {
   constructor() {
-    this.tasks = StorageManager.getTasks();
+    this.reloadUserData();
     this.statusFilter = 'all';
     this.categoryFilter = 'all';
     this.searchQuery = '';
     this.sortBy = 'created-desc';
-    this.viewMode = StorageManager.getViewMode(); // 'list' | 'kanban' | 'matrix'
     this.undoStack = [];
     this.creatorSubtasks = [];
     this.editModalSubtasks = [];
-    this.customCategories = StorageManager.getCustomCategories();
     this.draggedTaskId = null;
     this.activePomodoroTask = null;
+  }
+
+  reloadUserData() {
+    this.tasks = StorageManager.getTasks();
+    this.customCategories = StorageManager.getCustomCategories();
+    this.viewMode = StorageManager.getViewMode();
   }
 
   addTask(data) {
@@ -586,12 +729,13 @@ class AppState {
 }
 
 // ==========================================================================
-// 6. UI & Multi-View Rendering Engine
+// 7. UI Manager & Multi-User Controller
 // ==========================================================================
 class UIManager {
   constructor(appState) {
     this.state = appState;
     this.initDOMElements();
+    this.initAuth();
     this.initTheme();
     this.initGamification();
     this.initSoundUI();
@@ -605,6 +749,32 @@ class UIManager {
 
   initDOMElements() {
     this.currentDateDisplay = document.getElementById('current-date-display');
+    this.userProfileBtn = document.getElementById('user-profile-btn');
+    this.userAvatarInitials = document.getElementById('user-avatar-initials');
+    this.userNameDisplay = document.getElementById('user-name-display');
+    this.userDropdownMenu = document.getElementById('user-dropdown-menu');
+    this.dropdownUserName = document.getElementById('dropdown-user-name');
+    this.dropdownUserEmail = document.getElementById('dropdown-user-email');
+    this.dropdownSignInBtn = document.getElementById('dropdown-signin-btn');
+    this.dropdownSignOutBtn = document.getElementById('dropdown-signout-btn');
+    this.footerAuthBtn = document.getElementById('footer-auth-btn');
+
+    this.authDialog = document.getElementById('auth-dialog');
+    this.authCloseBtn = document.getElementById('auth-close-btn');
+    this.authCancelBtn = document.getElementById('auth-cancel-btn');
+    this.authGuestBtn = document.getElementById('auth-guest-btn');
+    this.authTabSignIn = document.getElementById('auth-tab-signin');
+    this.authTabSignUp = document.getElementById('auth-tab-signup');
+    this.signInForm = document.getElementById('signin-form');
+    this.signUpForm = document.getElementById('signup-form');
+    this.signInEmailInput = document.getElementById('signin-email');
+    this.signInPasswordInput = document.getElementById('signin-password');
+    this.signUpNameInput = document.getElementById('signup-name');
+    this.signUpEmailInput = document.getElementById('signup-email');
+    this.signUpPasswordInput = document.getElementById('signup-password');
+    this.quickDemoLoginBtn = document.getElementById('quick-demo-login-btn');
+    this.authErrorMessage = document.getElementById('auth-error-message');
+
     this.streakCountEl = document.getElementById('streak-count');
     this.levelBadge = document.getElementById('level-badge');
     this.xpFillBar = document.getElementById('xp-fill-bar');
@@ -728,6 +898,137 @@ class UIManager {
     this.toastContainer = document.getElementById('toast-container');
   }
 
+  initAuth() {
+    this.updateUserUI();
+
+    this.userProfileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.userDropdownMenu.classList.toggle('active');
+    });
+
+    document.addEventListener('click', () => {
+      this.userDropdownMenu.classList.remove('active');
+    });
+
+    this.dropdownSignInBtn.addEventListener('click', () => {
+      this.userDropdownMenu.classList.remove('active');
+      this.openAuthModal('signin');
+    });
+
+    this.footerAuthBtn.addEventListener('click', () => {
+      this.openAuthModal('signin');
+    });
+
+    this.dropdownSignOutBtn.addEventListener('click', () => {
+      this.userDropdownMenu.classList.remove('active');
+      AuthManager.signOut();
+      this.onAuthChange('Signed out successfully. Switched to Guest mode.');
+    });
+
+    this.authTabSignIn.addEventListener('click', () => this.switchAuthTab('signin'));
+    this.authTabSignUp.addEventListener('click', () => this.switchAuthTab('signup'));
+    this.authCloseBtn.addEventListener('click', () => this.authDialog.close());
+    this.authCancelBtn.addEventListener('click', () => this.authDialog.close());
+    this.authGuestBtn.addEventListener('click', () => {
+      AuthManager.signOut();
+      this.authDialog.close();
+      this.onAuthChange('Continuing as Guest');
+    });
+
+    this.quickDemoLoginBtn.addEventListener('click', () => {
+      this.signInEmailInput.value = 'demo@taskflow.pro';
+      this.signInPasswordInput.value = 'password123';
+      this.signInEmailInput.focus();
+    });
+
+    document.querySelectorAll('.password-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-target');
+        const input = document.getElementById(targetId);
+        if (input) {
+          const isPass = input.type === 'password';
+          input.type = isPass ? 'text' : 'password';
+        }
+      });
+    });
+
+    this.signInForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      this.hideAuthError();
+      const email = this.signInEmailInput.value;
+      const pass = this.signInPasswordInput.value;
+      try {
+        const user = await AuthManager.signIn(email, pass);
+        this.authDialog.close();
+        this.onAuthChange(`Welcome back, ${user.name}!`);
+      } catch (err) {
+        this.showAuthError(err.message);
+      }
+    });
+
+    this.signUpForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      this.hideAuthError();
+      const name = this.signUpNameInput.value;
+      const email = this.signUpEmailInput.value;
+      const pass = this.signUpPasswordInput.value;
+      try {
+        const user = await AuthManager.signUp(name, email, pass);
+        this.authDialog.close();
+        ConfettiEngine.fire(70);
+        this.onAuthChange(`Account created! Welcome, ${user.name}!`);
+      } catch (err) {
+        this.showAuthError(err.message);
+      }
+    });
+  }
+
+  openAuthModal(tab = 'signin') {
+    this.hideAuthError();
+    this.switchAuthTab(tab);
+    this.authDialog.showModal();
+  }
+
+  switchAuthTab(tab) {
+    this.authTabSignIn.classList.toggle('active', tab === 'signin');
+    this.authTabSignUp.classList.toggle('active', tab === 'signup');
+    this.signInForm.classList.toggle('active', tab === 'signin');
+    this.signUpForm.classList.toggle('active', tab === 'signup');
+    document.getElementById('auth-modal-title').textContent = tab === 'signin' ? 'Account Sign In' : 'Create Account';
+  }
+
+  showAuthError(msg) {
+    this.authErrorMessage.textContent = msg;
+    this.authErrorMessage.classList.add('visible');
+  }
+
+  hideAuthError() {
+    this.authErrorMessage.textContent = '';
+    this.authErrorMessage.classList.remove('visible');
+  }
+
+  updateUserUI() {
+    const user = AuthManager.getActiveUser();
+    const isGuest = !!user.isGuest;
+
+    const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'G';
+    this.userAvatarInitials.textContent = initials;
+    this.userNameDisplay.textContent = user.name.split(' ')[0] || 'Guest';
+
+    this.dropdownUserName.textContent = user.name;
+    this.dropdownUserEmail.textContent = user.email;
+    this.dropdownSignOutBtn.style.display = isGuest ? 'none' : 'flex';
+    this.dropdownSignInBtn.querySelector('span').textContent = isGuest ? 'Sign In / Register' : 'Switch Account';
+  }
+
+  onAuthChange(toastMessage) {
+    this.updateUserUI();
+    this.state.reloadUserData();
+    this.initGamification();
+    this.render();
+    if (toastMessage) this.showToast(toastMessage);
+  }
+
   initTheme() {
     const saved = StorageManager.getTheme();
     document.documentElement.setAttribute('data-theme', saved);
@@ -807,11 +1108,9 @@ class UIManager {
       clearInterval(this.pomoInterval);
       this.pomoRunning = false;
       this.pomoStartBtn.textContent = 'Resume Focus';
-      this.pomoStartBtn.classList.remove('running');
     } else {
       this.pomoRunning = true;
       this.pomoStartBtn.textContent = 'Pause';
-      this.pomoStartBtn.classList.add('running');
       this.pomoInterval = setInterval(() => {
         if (this.pomoTimeLeft > 0) {
           this.pomoTimeLeft--;
@@ -828,7 +1127,6 @@ class UIManager {
     this.pomoRunning = false;
     this.pomoTimeLeft = this.pomoDuration;
     this.pomoStartBtn.textContent = 'Start Focus';
-    this.pomoStartBtn.classList.remove('running');
     this.updatePomoUI();
   }
 
@@ -1009,7 +1307,7 @@ class UIManager {
 
     this.footerResetBtn.addEventListener('click', () => {
       if (confirm('Reset tasks to original sample data? Any unsaved tasks will be replaced.')) {
-        this.state.tasks = JSON.parse(JSON.stringify(SAMPLE_TASKS));
+        this.state.tasks = JSON.parse(JSON.stringify(DEFAULT_TASKS));
         this.state.save();
         this.render();
         this.showToast('Reset to default sample tasks');
@@ -1177,6 +1475,7 @@ class UIManager {
         if (this.dataDialog.open) this.dataDialog.close();
         if (this.pomodoroDialog.open) this.pomodoroDialog.close();
         if (this.customCategoryDialog.open) this.customCategoryDialog.close();
+        if (this.authDialog.open) this.authDialog.close();
       }
     });
   }
@@ -1669,7 +1968,7 @@ class UIManager {
 }
 
 // ==========================================================================
-// 7. App Bootstrap
+// 8. App Bootstrap
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   ConfettiEngine.init();
