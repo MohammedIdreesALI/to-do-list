@@ -883,3 +883,54 @@ textarea.form-control { min-height: 80px; resize: vertical; }
 .auth-error-message.visible {
   display: block;
 }
+
+/* ==========================================================================
+   SQL CLOUD STATUS BADGE & SERVER SETTINGS
+   ========================================================================== */
+.sql-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sql-status-badge:hover {
+  background: var(--bg-base);
+  border-color: var(--border-medium);
+}
+
+.sql-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.sql-status-badge.online .sql-status-dot {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.sql-status-badge.online {
+  color: var(--success);
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+
+.server-config-box {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

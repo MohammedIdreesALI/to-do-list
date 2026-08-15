@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="TaskFlow Pro — Modern task manager with multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
+  <meta name="description" content="TaskFlow Pro — Modern task manager with SQL Cloud sync, multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
   <title>TaskFlow Pro — Master Your Day</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,7 +27,13 @@
         </div>
         <div class="brand-text">
           <h1>TaskFlow <span class="brand-pro-badge">PRO</span></h1>
-          <span class="app-date" id="current-date-display">Today</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 2px;">
+            <span class="app-date" id="current-date-display">Today</span>
+            <button type="button" class="sql-status-badge" id="sql-status-badge" title="Click to view SQL database sync status">
+              <span class="sql-status-dot"></span>
+              <span id="sql-status-text">Checking SQL...</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -48,8 +54,8 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         </button>
 
-        <!-- Data Backup -->
-        <button type="button" class="icon-btn" id="data-btn" data-tooltip="Backup & Export" aria-label="Backup">
+        <!-- Data / SQL Settings -->
+        <button type="button" class="icon-btn" id="data-btn" data-tooltip="SQL & Backup" aria-label="Backup">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
         </button>
 
@@ -117,22 +123,10 @@
       </div>
 
       <div class="stats-metrics">
-        <div class="metric-pill">
-          <span class="metric-val" id="stat-total">0</span>
-          <span class="metric-label">Total</span>
-        </div>
-        <div class="metric-pill">
-          <span class="metric-val" id="stat-active">0</span>
-          <span class="metric-label">Pending</span>
-        </div>
-        <div class="metric-pill completed">
-          <span class="metric-val" id="stat-completed">0</span>
-          <span class="metric-label">Done</span>
-        </div>
-        <div class="metric-pill overdue">
-          <span class="metric-val" id="stat-overdue">0</span>
-          <span class="metric-label">Overdue</span>
-        </div>
+        <div class="metric-pill"><span class="metric-val" id="stat-total">0</span><span class="metric-label">Total</span></div>
+        <div class="metric-pill"><span class="metric-val" id="stat-active">0</span><span class="metric-label">Pending</span></div>
+        <div class="metric-pill completed"><span class="metric-val" id="stat-completed">0</span><span class="metric-label">Done</span></div>
+        <div class="metric-pill overdue"><span class="metric-val" id="stat-overdue">0</span><span class="metric-label">Overdue</span></div>
       </div>
     </section>
 
@@ -143,7 +137,7 @@
           <span class="task-input-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
           </span>
-          <input type="text" id="task-title-input" class="task-input" placeholder="Add a new task... (or use voice)" autocomplete="off" required>
+          <input type="text" id="task-title-input" class="task-input" placeholder="Add a new task... (or use voice dictation)" autocomplete="off" required>
           
           <button type="button" class="voice-input-btn" id="voice-input-btn" data-tooltip="Voice input" aria-label="Voice input">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
@@ -267,67 +261,39 @@
       </div>
     </section>
 
-    <!-- VIEW 1: Main Task List Section -->
+    <!-- Main Views -->
     <main class="task-list-section" id="list-view-section">
       <ul class="task-list" id="task-list" aria-label="Tasks List"></ul>
-
       <div class="empty-state" id="empty-state" style="display: none;">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-        </div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
         <h3 class="empty-title" id="empty-title">No tasks found</h3>
         <p class="empty-desc" id="empty-desc">Your task list is empty. Add a task above to start organizing your day!</p>
       </div>
     </main>
 
-    <!-- VIEW 2: Kanban Board View -->
     <section class="kanban-container" id="kanban-view-section" style="display: none;">
       <div class="kanban-column" data-kanban-status="todo">
-        <div class="kanban-column-header">
-          <div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-todo"></span><span>To Do</span></div>
-          <span class="kanban-count-pill" id="kanban-count-todo">0</span>
-        </div>
+        <div class="kanban-column-header"><div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-todo"></span><span>To Do</span></div><span class="kanban-count-pill" id="kanban-count-todo">0</span></div>
         <div class="kanban-cards-list" id="kanban-list-todo"></div>
       </div>
-
       <div class="kanban-column" data-kanban-status="inprogress">
-        <div class="kanban-column-header">
-          <div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-inprogress"></span><span>In Progress</span></div>
-          <span class="kanban-count-pill" id="kanban-count-inprogress">0</span>
-        </div>
+        <div class="kanban-column-header"><div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-inprogress"></span><span>In Progress</span></div><span class="kanban-count-pill" id="kanban-count-inprogress">0</span></div>
         <div class="kanban-cards-list" id="kanban-list-inprogress"></div>
       </div>
-
       <div class="kanban-column" data-kanban-status="done">
-        <div class="kanban-column-header">
-          <div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-done"></span><span>Completed</span></div>
-          <span class="kanban-count-pill" id="kanban-count-done">0</span>
-        </div>
+        <div class="kanban-column-header"><div class="kanban-title-wrap"><span class="kanban-indicator-dot dot-done"></span><span>Completed</span></div><span class="kanban-count-pill" id="kanban-count-done">0</span></div>
         <div class="kanban-cards-list" id="kanban-list-done"></div>
       </div>
     </section>
 
-    <!-- VIEW 3: Eisenhower Matrix View -->
     <section class="matrix-container" id="matrix-view-section" style="display: none;">
-      <div class="matrix-quadrant q1">
-        <div class="quadrant-header"><span class="quadrant-title">🔥 Urgent & Important (Do First)</span><span class="badge badge-priority-high" id="matrix-count-q1">0</span></div>
-        <div class="kanban-cards-list" id="matrix-list-q1"></div>
-      </div>
-      <div class="matrix-quadrant q2">
-        <div class="quadrant-header"><span class="quadrant-title">🎯 Important, Not Urgent (Schedule)</span><span class="badge badge-priority-med" id="matrix-count-q2">0</span></div>
-        <div class="kanban-cards-list" id="matrix-list-q2"></div>
-      </div>
-      <div class="matrix-quadrant q3">
-        <div class="quadrant-header"><span class="quadrant-title">⚡ Urgent, Not Important (Delegate)</span><span class="badge" id="matrix-count-q3">0</span></div>
-        <div class="kanban-cards-list" id="matrix-list-q3"></div>
-      </div>
-      <div class="matrix-quadrant q4">
-        <div class="quadrant-header"><span class="quadrant-title">☕ Neither (Eliminate / Chill)</span><span class="badge badge-priority-low" id="matrix-count-q4">0</span></div>
-        <div class="kanban-cards-list" id="matrix-list-q4"></div>
-      </div>
+      <div class="matrix-quadrant q1"><div class="quadrant-header"><span class="quadrant-title">🔥 Urgent & Important (Do First)</span><span class="badge badge-priority-high" id="matrix-count-q1">0</span></div><div class="kanban-cards-list" id="matrix-list-q1"></div></div>
+      <div class="matrix-quadrant q2"><div class="quadrant-header"><span class="quadrant-title">🎯 Important, Not Urgent (Schedule)</span><span class="badge badge-priority-med" id="matrix-count-q2">0</span></div><div class="kanban-cards-list" id="matrix-list-q2"></div></div>
+      <div class="matrix-quadrant q3"><div class="quadrant-header"><span class="quadrant-title">⚡ Urgent, Not Important (Delegate)</span><span class="badge" id="matrix-count-q3">0</span></div><div class="kanban-cards-list" id="matrix-list-q3"></div></div>
+      <div class="matrix-quadrant q4"><div class="quadrant-header"><span class="quadrant-title">☕ Neither (Eliminate / Chill)</span><span class="badge badge-priority-low" id="matrix-count-q4">0</span></div><div class="kanban-cards-list" id="matrix-list-q4"></div></div>
     </section>
 
-    <!-- Footer Info -->
+    <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-links">
         <button type="button" class="footer-link" id="footer-auth-btn">Account Login</button>
@@ -336,15 +302,15 @@
         <span>•</span>
         <button type="button" class="footer-link" id="footer-pomodoro-btn">Pomodoro Timer</button>
         <span>•</span>
-        <button type="button" class="footer-link" id="footer-backup-btn">Backup & Export</button>
+        <button type="button" class="footer-link" id="footer-backup-btn">SQL & Backup</button>
         <span>•</span>
         <button type="button" class="footer-link" id="footer-reset-btn">Reset Sample Tasks</button>
       </div>
-      <p>TaskFlow Pro — Engineered for maximum clarity and deep work.</p>
+      <p>TaskFlow Pro — Powered by Relational SQL & Deep Focus Engine.</p>
     </footer>
   </div>
 
-  <!-- Authentication Dialog (Sign In / Sign Up) -->
+  <!-- Auth Dialog -->
   <dialog id="auth-dialog">
     <div class="modal-card" style="width: 440px;">
       <div class="modal-header">
@@ -424,18 +390,16 @@
     </div>
   </dialog>
 
-  <!-- Pomodoro Timer Dialog -->
+  <!-- Pomodoro Dialog -->
   <dialog id="pomodoro-dialog">
     <div class="pomodoro-card">
       <button type="button" class="modal-close-btn" id="pomo-close-btn" style="position:absolute; top:1rem; right:1rem;">✕</button>
       <h3 style="font-size:1.1rem; font-weight:800;">Pomodoro Focus Session</h3>
-      
       <div class="pomodoro-modes">
         <button type="button" class="pomo-mode-btn active" data-pomo="25">25m Focus</button>
         <button type="button" class="pomo-mode-btn" data-pomo="5">5m Break</button>
         <button type="button" class="pomo-mode-btn" data-pomo="15">15m Long Break</button>
       </div>
-
       <div class="pomodoro-clock-wrap">
         <svg class="pomo-svg" viewBox="0 0 180 180">
           <circle class="pomo-circle-bg" cx="90" cy="90" r="80"></circle>
@@ -443,9 +407,7 @@
         </svg>
         <span class="pomo-time-display" id="pomo-time-display">25:00</span>
       </div>
-
       <p class="pomo-active-task-label" id="pomo-active-task-label">Focusing on: Free Flow Session</p>
-
       <div class="pomodoro-controls">
         <button type="button" class="btn-pomo-primary" id="pomo-start-btn">Start Focus</button>
         <button type="button" class="btn-secondary" id="pomo-reset-btn">Reset</button>
@@ -453,56 +415,33 @@
     </div>
   </dialog>
 
-  <!-- Edit Task Modal Dialog -->
+  <!-- Edit Task Dialog -->
   <dialog id="edit-task-dialog">
     <div class="modal-card">
       <div class="modal-header">
         <h3 class="modal-title">Edit Task</h3>
         <button type="button" class="modal-close-btn" id="edit-modal-close-btn">✕</button>
       </div>
-
       <form id="edit-task-form">
         <div class="modal-body">
           <input type="hidden" id="edit-task-id">
-          
-          <div class="form-group">
-            <label class="form-label" for="edit-task-title">Task Title</label>
-            <input type="text" id="edit-task-title" class="form-control" required autocomplete="off">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="edit-task-notes">Description / Notes</label>
-            <textarea id="edit-task-notes" class="form-control" placeholder="Add extra details, instructions, or links..."></textarea>
-          </div>
-
+          <div class="form-group"><label class="form-label" for="edit-task-title">Task Title</label><input type="text" id="edit-task-title" class="form-control" required autocomplete="off"></div>
+          <div class="form-group"><label class="form-label" for="edit-task-notes">Description / Notes</label><textarea id="edit-task-notes" class="form-control" placeholder="Add extra details, instructions, or links..."></textarea></div>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="edit-task-priority">Priority</label>
               <select id="edit-task-priority" class="form-control">
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
               </select>
             </div>
-
             <div class="form-group">
               <label class="form-label" for="edit-task-category">Category</label>
               <select id="edit-task-category" class="form-control">
-                <option value="work">Work</option>
-                <option value="personal">Personal</option>
-                <option value="health">Health</option>
-                <option value="finance">Finance</option>
-                <option value="learning">Learning</option>
-                <option value="urgent">Urgent</option>
+                <option value="work">Work</option><option value="personal">Personal</option><option value="health">Health</option><option value="finance">Finance</option><option value="learning">Learning</option><option value="urgent">Urgent</option>
               </select>
             </div>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" for="edit-task-due-date">Due Date</label>
-            <input type="date" id="edit-task-due-date" class="form-control">
-          </div>
-
+          <div class="form-group"><label class="form-label" for="edit-task-due-date">Due Date</label><input type="date" id="edit-task-due-date" class="form-control"></div>
           <div class="form-group">
             <label class="form-label">Subtasks & Steps</label>
             <div class="subtask-input-row">
@@ -512,7 +451,6 @@
             <div class="subtask-list-preview" id="edit-subtasks-list" style="margin-top: 0.5rem;"></div>
           </div>
         </div>
-
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="edit-cancel-btn">Cancel</button>
           <button type="submit" class="btn-primary">Save Changes</button>
@@ -524,10 +462,7 @@
   <!-- Add Custom Tag Dialog -->
   <dialog id="custom-category-dialog">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">Create Custom Tag</h3>
-        <button type="button" class="modal-close-btn" id="custom-cat-close-btn">✕</button>
-      </div>
+      <div class="modal-header"><h3 class="modal-title">Create Custom Tag</h3><button type="button" class="modal-close-btn" id="custom-cat-close-btn">✕</button></div>
       <form id="custom-category-form">
         <div class="modal-body">
           <div class="form-group">
@@ -546,10 +481,7 @@
   <!-- Shortcuts Modal -->
   <dialog id="shortcuts-dialog">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">Keyboard Shortcuts</h3>
-        <button type="button" class="modal-close-btn" id="shortcuts-close-btn">✕</button>
-      </div>
+      <div class="modal-header"><h3 class="modal-title">Keyboard Shortcuts</h3><button type="button" class="modal-close-btn" id="shortcuts-close-btn">✕</button></div>
       <div class="modal-body">
         <div class="shortcuts-grid">
           <div class="shortcut-row"><span class="shortcut-label">Focus new task input</span><span class="kbd-badge">N</span></div>
@@ -562,25 +494,30 @@
           <div class="shortcut-row"><span class="shortcut-label">Close dialogs & clear search</span><span class="kbd-badge">Esc</span></div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn-secondary" id="shortcuts-got-it-btn">Got it</button>
-      </div>
+      <div class="modal-footer"><button type="button" class="btn-secondary" id="shortcuts-got-it-btn">Got it</button></div>
     </div>
   </dialog>
 
-  <!-- Data Backup & Export Modal -->
+  <!-- Data, SQL & Export Modal -->
   <dialog id="data-dialog">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3 class="modal-title">Data, Backup & Export</h3>
-        <button type="button" class="modal-close-btn" id="data-close-btn">✕</button>
-      </div>
+      <div class="modal-header"><h3 class="modal-title">SQL Database & Backup</h3><button type="button" class="modal-close-btn" id="data-close-btn">✕</button></div>
       <div class="modal-body">
-        <p style="font-size: 0.88rem; color: var(--text-muted);">
-          Your tasks, XP, and streak data are securely isolated to your account in this browser.
+        <!-- SQL Server Config -->
+        <div class="server-config-box">
+          <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">SQL Backend API Server URL</span>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="api-server-url-input" class="form-control" placeholder="http://localhost:5000" style="flex:1; font-size: 0.85rem;">
+            <button type="button" class="btn-primary" id="save-server-url-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Save & Connect</button>
+          </div>
+          <span style="font-size: 0.74rem; color: var(--text-muted);">Points to your local Node.js SQL server or deployed cloud API.</span>
+        </div>
+
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.3rem;">
+          Your data is synchronized with your SQL database account and cached locally for offline resilience.
         </p>
 
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 0.3rem;">
           <button type="button" class="btn-primary" id="export-json-btn" style="width: 100%;">Export Backup (JSON)</button>
           <button type="button" class="btn-secondary" id="export-csv-btn" style="width: 100%;">Export Spreadsheet (CSV)</button>
           <label class="btn-secondary" style="width: 100%; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
@@ -589,9 +526,7 @@
           </label>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn-secondary" id="data-done-btn">Done</button>
-      </div>
+      <div class="modal-footer"><button type="button" class="btn-secondary" id="data-done-btn">Done</button></div>
     </div>
   </dialog>
 

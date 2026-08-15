@@ -1,0 +1,23 @@
+﻿{
+  "name": "taskflow-pro",
+  "version": "2.0.0",
+  "description": "Modern Task & Productivity Platform with SQL Database, Kanban Boards, Pomodoro Timer & Gamification",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "server": "node server/server.js"
+  },
+  "keywords": [
+    "todo",
+    "productivity",
+    "sql",
+    "sqlite",
+    "kanban",
+    "pomodoro",
+    "gamification",
+    "vanilla-javascript"
+  ],
+  "author": "Mohammed Idrees Ali",
+  "license": "MIT"
+}

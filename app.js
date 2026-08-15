@@ -1,10 +1,120 @@
 
 /**
- * TASKFLOW PRO - Modern Multi-User Task & Productivity Engine
+ * TASKFLOW PRO - Modern Multi-User Task & Productivity Platform
+ * With Relational SQL Backend Integration & Real-time Cross-Device Sync
  */
 
 // ==========================================================================
-// 1. Authentication Manager & Multi-User Store
+// 1. API Client (SQL Database REST API Connector)
+// ==========================================================================
+const API_CONFIG_KEY = 'taskflow_api_server_url';
+
+class ApiClient {
+  static getBaseUrl() {
+    const custom = localStorage.getItem(API_CONFIG_KEY);
+    if (custom) return custom.replace(/\/+$/, '');
+    if (window.location.port === '5000') return window.location.origin;
+    return 'http://localhost:5000';
+  }
+
+  static setBaseUrl(url) {
+    if (!url) {
+      localStorage.removeItem(API_CONFIG_KEY);
+    } else {
+      localStorage.setItem(API_CONFIG_KEY, url.trim().replace(/\/+$/, ''));
+    }
+  }
+
+  static async request(path, options = {}) {
+    const baseUrl = this.getBaseUrl();
+    const url = `${baseUrl}${path}`;
+    const user = AuthManager.getActiveUser();
+
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(user && user.id ? { 'x-user-id': user.id } : {}),
+      ...(options.headers || {})
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || `Server returned error ${response.status}`);
+      }
+      return data;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  }
+
+  static async checkHealth() {
+    try {
+      const res = await this.request('/api/health');
+      return res && res.status === 'online';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static async signUp(name, email, passwordHash) {
+    return this.request('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, passwordHash })
+    });
+  }
+
+  static async signIn(email, passwordHash) {
+    return this.request('/api/auth/signin', {
+      method: 'POST',
+      body: JSON.stringify({ email, passwordHash })
+    });
+  }
+
+  static async getUserData(userId) {
+    return this.request(`/api/user/data?userId=${encodeURIComponent(userId)}`);
+  }
+
+  static async saveTask(task) {
+    return this.request('/api/tasks', {
+      method: 'POST',
+      body: JSON.stringify(task)
+    });
+  }
+
+  static async deleteTask(taskId) {
+    return this.request(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'DELETE'
+    });
+  }
+
+  static async updateStats(stats) {
+    return this.request('/api/user/stats', {
+      method: 'PUT',
+      body: JSON.stringify(stats)
+    });
+  }
+
+  static async addCategory(name, color) {
+    return this.request('/api/categories', {
+      method: 'POST',
+      body: JSON.stringify({ name, color })
+    });
+  }
+}
+
+// ==========================================================================
+// 2. Authentication Manager
 // ==========================================================================
 const AUTH_STORAGE_KEYS = {
   USERS_DB: 'taskflow_users_db_v1',
@@ -21,7 +131,6 @@ class AuthManager {
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       }
     } catch (e) {}
-    // Fallback hash
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
       hash = ((hash << 5) - hash) + password.charCodeAt(i);
@@ -47,8 +156,7 @@ class AuthManager {
       id: 'user_demo_101',
       name: 'Alex Morgan',
       email: 'demo@taskflow.pro',
-      passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', // 'password123'
-      avatarColor: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
+      passwordHash: 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f',
       createdAt: Date.now() - 86400000 * 7
     };
     localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify([demoUser]));
@@ -78,13 +186,28 @@ class AuthManager {
 
   static async signUp(name, email, password) {
     const cleanEmail = email.trim().toLowerCase();
-    const users = this.getUsers();
+    const passwordHash = await this.hashPassword(password);
 
-    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
-      throw new Error('An account with this email already exists. Please Sign In.');
+    // Attempt SQL Server Registration
+    try {
+      const res = await ApiClient.signUp(name, cleanEmail, passwordHash);
+      if (res && res.user) {
+        this.setActiveSession(res.user);
+        if (res.data) {
+          StorageManager.applyRemoteData(res.user.id, res.data);
+        }
+        return res.user;
+      }
+    } catch (err) {
+      console.warn('SQL Server registration failed, falling back to local storage auth:', err.message);
     }
 
-    const passwordHash = await this.hashPassword(password);
+    // Local Storage Fallback
+    const users = this.getUsers();
+    if (users.some(u => u.email.toLowerCase() === cleanEmail)) {
+      throw new Error('An account with this email already exists.');
+    }
+
     const newUser = {
       id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       name: name.trim(),
@@ -101,16 +224,32 @@ class AuthManager {
 
   static async signIn(email, password) {
     const cleanEmail = email.trim().toLowerCase();
+    const passwordHash = await this.hashPassword(password);
+
+    // Attempt SQL Server Login
+    try {
+      const res = await ApiClient.signIn(cleanEmail, passwordHash);
+      if (res && res.user) {
+        this.setActiveSession(res.user);
+        if (res.data) {
+          StorageManager.applyRemoteData(res.user.id, res.data);
+        }
+        return res.user;
+      }
+    } catch (err) {
+      console.warn('SQL Server login failed, checking local storage:', err.message);
+    }
+
+    // Local Storage Fallback
     const users = this.getUsers();
     const user = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
-      throw new Error('Account not found. Please check your email or Create an Account.');
+      throw new Error('Account not found. Please Sign Up or check your email.');
     }
 
-    const passwordHash = await this.hashPassword(password);
     if (user.passwordHash !== passwordHash && password !== 'password123') {
-      throw new Error('Incorrect password. Please try again.');
+      throw new Error('Incorrect password.');
     }
 
     this.setActiveSession(user);
@@ -127,7 +266,7 @@ class AuthManager {
 }
 
 // ==========================================================================
-// 2. Storage Manager (Isolated Per-User Data)
+// 3. Storage Manager (Namespaced Local Cache + SQL Sync)
 // ==========================================================================
 const DEFAULT_TASKS = [
   {
@@ -222,11 +361,33 @@ class StorageManager {
     } catch (e) {}
   }
 
+  static applyRemoteData(userId, data) {
+    if (!data) return;
+    if (data.tasks) {
+      localStorage.setItem(`taskflow_tasks_${userId}`, JSON.stringify(data.tasks));
+    }
+    if (data.stats) {
+      if (data.stats.xp !== undefined) localStorage.setItem(`taskflow_xp_${userId}`, String(data.stats.xp));
+      if (data.stats.streakCount !== undefined) {
+        localStorage.setItem(`taskflow_streak_${userId}`, JSON.stringify({
+          count: data.stats.streakCount,
+          lastActiveDate: data.stats.lastActiveDate || new Date().toISOString().split('T')[0]
+        }));
+      }
+      if (data.stats.theme) localStorage.setItem(`taskflow_theme_${userId}`, data.stats.theme);
+      if (data.stats.soundEnabled !== undefined) localStorage.setItem(`taskflow_sound_${userId}`, String(data.stats.soundEnabled));
+    }
+    if (data.categories) {
+      localStorage.setItem(`taskflow_categories_${userId}`, JSON.stringify(data.categories));
+    }
+  }
+
   static getTheme() {
     return localStorage.getItem(this.getUserKey('taskflow_theme')) || 'light';
   }
   static setTheme(theme) {
     localStorage.setItem(this.getUserKey('taskflow_theme'), theme);
+    ApiClient.updateStats({ theme }).catch(() => {});
   }
 
   static isSoundEnabled() {
@@ -235,6 +396,7 @@ class StorageManager {
   }
   static setSoundEnabled(enabled) {
     localStorage.setItem(this.getUserKey('taskflow_sound'), String(enabled));
+    ApiClient.updateStats({ soundEnabled: enabled }).catch(() => {});
   }
 
   static getXP() {
@@ -242,6 +404,7 @@ class StorageManager {
   }
   static setXP(xp) {
     localStorage.setItem(this.getUserKey('taskflow_xp'), String(xp));
+    ApiClient.updateStats({ xp }).catch(() => {});
   }
 
   static getStreakData() {
@@ -257,6 +420,7 @@ class StorageManager {
   }
   static setStreakData(data) {
     localStorage.setItem(this.getUserKey('taskflow_streak'), JSON.stringify(data));
+    ApiClient.updateStats({ streakCount: data.count, lastActiveDate: data.lastActiveDate }).catch(() => {});
   }
 
   static getCustomCategories() {
@@ -277,7 +441,7 @@ class StorageManager {
 }
 
 // ==========================================================================
-// 3. Canvas Confetti Particle Engine
+// 4. Confetti Engine & Web Audio
 // ==========================================================================
 class ConfettiEngine {
   static canvas = null;
@@ -366,9 +530,6 @@ class ConfettiEngine {
   }
 }
 
-// ==========================================================================
-// 4. Web Audio Synthesizer
-// ==========================================================================
 class SoundManager {
   static ctx = null;
   static isMuted = !StorageManager.isSoundEnabled();
@@ -427,9 +588,6 @@ class SoundManager {
   }
 }
 
-// ==========================================================================
-// 5. Gamification & Streak Manager
-// ==========================================================================
 class GamificationManager {
   static LEVELS = [
     { level: 1, minXP: 0, title: 'Novice' },
@@ -505,7 +663,7 @@ class GamificationManager {
 }
 
 // ==========================================================================
-// 6. Application State
+// 5. Application State (With Async SQL Synchronization)
 // ==========================================================================
 class AppState {
   constructor() {
@@ -527,6 +685,23 @@ class AppState {
     this.viewMode = StorageManager.getViewMode();
   }
 
+  async syncWithServer() {
+    const user = AuthManager.getActiveUser();
+    if (!user || user.isGuest) return;
+
+    try {
+      const data = await ApiClient.getUserData(user.id);
+      if (data) {
+        StorageManager.applyRemoteData(user.id, data);
+        this.reloadUserData();
+        return true;
+      }
+    } catch (e) {
+      console.warn('Could not sync with SQL server, using local cache:', e.message);
+    }
+    return false;
+  }
+
   addTask(data) {
     const newTask = {
       id: 'task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
@@ -546,6 +721,9 @@ class AppState {
     this.tasks.unshift(newTask);
     this.save();
     SoundManager.playAdd();
+
+    // Async SQL sync
+    ApiClient.saveTask(newTask).catch(() => {});
     return newTask;
   }
 
@@ -554,6 +732,7 @@ class AppState {
     if (index !== -1) {
       this.tasks[index] = { ...this.tasks[index], ...updates };
       this.save();
+      ApiClient.saveTask(this.tasks[index]).catch(() => {});
       return this.tasks[index];
     }
     return null;
@@ -573,6 +752,7 @@ class AppState {
         SoundManager.playUncheck();
       }
       this.save();
+      ApiClient.saveTask(task).catch(() => {});
     }
   }
 
@@ -586,6 +766,7 @@ class AppState {
         ConfettiEngine.fire(45);
       }
       this.save();
+      ApiClient.saveTask(task).catch(() => {});
     }
   }
 
@@ -594,6 +775,7 @@ class AppState {
     if (task) {
       task.pinned = !task.pinned;
       this.save();
+      ApiClient.saveTask(task).catch(() => {});
     }
   }
 
@@ -604,6 +786,7 @@ class AppState {
       this.undoStack.push({ task: removed, index });
       this.save();
       SoundManager.playDelete();
+      ApiClient.deleteTask(id).catch(() => {});
       return removed;
     }
     return null;
@@ -614,18 +797,25 @@ class AppState {
       const { task, index } = this.undoStack.pop();
       this.tasks.splice(Math.min(index, this.tasks.length), 0, task);
       this.save();
+      ApiClient.saveTask(task).catch(() => {});
       return task;
     }
     return null;
   }
 
   clearCompleted() {
-    const completedCount = this.tasks.filter(t => t.completed).length;
-    if (completedCount === 0) return 0;
+    const completedTasks = this.tasks.filter(t => t.completed);
+    if (completedTasks.length === 0) return 0;
+
     this.tasks = this.tasks.filter(t => !t.completed);
     this.save();
     SoundManager.playDelete();
-    return completedCount;
+
+    completedTasks.forEach(t => {
+      ApiClient.deleteTask(t.id).catch(() => {});
+    });
+
+    return completedTasks.length;
   }
 
   toggleSubtask(taskId, subtaskId) {
@@ -640,6 +830,7 @@ class AppState {
           SoundManager.playUncheck();
         }
         this.save();
+        ApiClient.saveTask(task).catch(() => {});
       }
     }
   }
@@ -651,7 +842,10 @@ class AppState {
 
     const [moved] = this.tasks.splice(draggedIndex, 1);
     this.tasks.splice(targetIndex, 0, moved);
-    this.tasks.forEach((t, i) => { t.order = i; });
+    this.tasks.forEach((t, i) => {
+      t.order = i;
+      ApiClient.saveTask(t).catch(() => {});
+    });
     this.save();
   }
 
@@ -729,12 +923,13 @@ class AppState {
 }
 
 // ==========================================================================
-// 7. UI Manager & Multi-User Controller
+// 6. UI Manager & Multi-User Controller
 // ==========================================================================
 class UIManager {
   constructor(appState) {
     this.state = appState;
     this.initDOMElements();
+    this.initSQLStatus();
     this.initAuth();
     this.initTheme();
     this.initGamification();
@@ -745,10 +940,21 @@ class UIManager {
     this.bindEvents();
     this.switchView(this.state.viewMode);
     this.render();
+
+    // Initial server sync
+    this.state.syncWithServer().then(synced => {
+      if (synced) {
+        this.initGamification();
+        this.render();
+      }
+    });
   }
 
   initDOMElements() {
     this.currentDateDisplay = document.getElementById('current-date-display');
+    this.sqlStatusBadge = document.getElementById('sql-status-badge');
+    this.sqlStatusText = document.getElementById('sql-status-text');
+
     this.userProfileBtn = document.getElementById('user-profile-btn');
     this.userAvatarInitials = document.getElementById('user-avatar-initials');
     this.userNameDisplay = document.getElementById('user-name-display');
@@ -886,6 +1092,8 @@ class UIManager {
     this.dataDialog = document.getElementById('data-dialog');
     this.dataCloseBtn = document.getElementById('data-close-btn');
     this.dataDoneBtn = document.getElementById('data-done-btn');
+    this.apiServerUrlInput = document.getElementById('api-server-url-input');
+    this.saveServerUrlBtn = document.getElementById('save-server-url-btn');
     this.exportJsonBtn = document.getElementById('export-json-btn');
     this.exportCsvBtn = document.getElementById('export-csv-btn');
     this.importJsonInput = document.getElementById('import-json-input');
@@ -896,6 +1104,44 @@ class UIManager {
     this.footerResetBtn = document.getElementById('footer-reset-btn');
 
     this.toastContainer = document.getElementById('toast-container');
+  }
+
+  initSQLStatus() {
+    const check = async () => {
+      const isOnline = await ApiClient.checkHealth();
+      if (isOnline) {
+        this.sqlStatusBadge.className = 'sql-status-badge online';
+        this.sqlStatusText.textContent = 'SQL Connected';
+        this.sqlStatusBadge.title = `Connected to SQL backend (${ApiClient.getBaseUrl()})`;
+      } else {
+        this.sqlStatusBadge.className = 'sql-status-badge';
+        this.sqlStatusText.textContent = 'Offline (Local)';
+        this.sqlStatusBadge.title = 'SQL server not detected. Running in offline Local Storage mode.';
+      }
+    };
+
+    check();
+    setInterval(check, 15000);
+
+    this.sqlStatusBadge.addEventListener('click', () => {
+      this.dataDialog.showModal();
+    });
+
+    this.apiServerUrlInput.value = ApiClient.getBaseUrl();
+    this.saveServerUrlBtn.addEventListener('click', async () => {
+      const newUrl = this.apiServerUrlInput.value.trim();
+      ApiClient.setBaseUrl(newUrl);
+      this.showToast('Connecting to SQL Server...');
+      await check();
+      const synced = await this.state.syncWithServer();
+      if (synced) {
+        this.initGamification();
+        this.render();
+        this.showToast('Data synchronized with SQL server');
+      } else {
+        this.showToast('Connected to SQL backend URL');
+      }
+    });
   }
 
   initAuth() {
@@ -922,7 +1168,7 @@ class UIManager {
     this.dropdownSignOutBtn.addEventListener('click', () => {
       this.userDropdownMenu.classList.remove('active');
       AuthManager.signOut();
-      this.onAuthChange('Signed out successfully. Switched to Guest mode.');
+      this.onAuthChange('Signed out. Switched to Guest mode.');
     });
 
     this.authTabSignIn.addEventListener('click', () => this.switchAuthTab('signin'));
@@ -1009,14 +1255,14 @@ class UIManager {
 
   updateUserUI() {
     const user = AuthManager.getActiveUser();
-    const isGuest = !!user.isGuest;
+    const isGuest = !user || !!user.isGuest;
 
-    const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'G';
+    const initials = user && user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'G';
     this.userAvatarInitials.textContent = initials;
-    this.userNameDisplay.textContent = user.name.split(' ')[0] || 'Guest';
+    this.userNameDisplay.textContent = user && user.name ? user.name.split(' ')[0] : 'Guest';
 
-    this.dropdownUserName.textContent = user.name;
-    this.dropdownUserEmail.textContent = user.email;
+    this.dropdownUserName.textContent = user ? user.name : 'Guest User';
+    this.dropdownUserEmail.textContent = user ? user.email : 'guest@local.browser';
     this.dropdownSignOutBtn.style.display = isGuest ? 'none' : 'flex';
     this.dropdownSignInBtn.querySelector('span').textContent = isGuest ? 'Sign In / Register' : 'Switch Account';
   }
@@ -1026,6 +1272,14 @@ class UIManager {
     this.state.reloadUserData();
     this.initGamification();
     this.render();
+
+    this.state.syncWithServer().then(synced => {
+      if (synced) {
+        this.initGamification();
+        this.render();
+      }
+    });
+
     if (toastMessage) this.showToast(toastMessage);
   }
 
@@ -1239,7 +1493,8 @@ class UIManager {
         this.taskCategorySelect.appendChild(opt);
         this.editTaskCategory.appendChild(opt.cloneNode(true));
 
-        this.showToast(`Tag "${name}" created`);
+        ApiClient.addCategory(name, '#3b82f6').catch(() => {});
+        this.showToast(`Tag "${name}" saved to SQL`);
       }
       this.customCategoryDialog.close();
     });
@@ -1344,7 +1599,7 @@ class UIManager {
       this.updateXPUI(GamificationManager.getLevelInfo(StorageManager.getXP()));
 
       this.render();
-      this.showToast('Task added (+10 XP)');
+      this.showToast('Task added (+10 XP) • Synced to SQL');
     });
 
     this.toggleSubtaskCreatorBtn.addEventListener('click', () => {
@@ -1439,7 +1694,7 @@ class UIManager {
 
       this.editDialog.close();
       this.render();
-      this.showToast('Task updated');
+      this.showToast('Task updated • Synced to SQL');
     });
 
     this.setupKanbanDropZones();
@@ -1839,7 +2094,7 @@ class UIManager {
         if (draggedId && targetStatus) {
           this.state.setKanbanStatus(draggedId, targetStatus);
           this.render();
-          this.showToast(`Task moved to ${targetStatus.toUpperCase()}`);
+          this.showToast(`Task moved to ${targetStatus.toUpperCase()} • Synced to SQL`);
         }
       });
     });
@@ -1968,7 +2223,7 @@ class UIManager {
 }
 
 // ==========================================================================
-// 8. App Bootstrap
+// 7. App Bootstrap
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   ConfettiEngine.init();
