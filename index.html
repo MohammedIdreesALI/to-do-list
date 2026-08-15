@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="TaskFlow Pro — Modern task manager with SQL Cloud sync, multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
+  <meta name="description" content="TaskFlow Pro — Modern task manager with Cloud SQL sync, multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
   <title>TaskFlow Pro — Master Your Day</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,6 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="style.css">
+  <!-- Supabase Cloud PostgreSQL Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <canvas id="confetti-canvas"></canvas>
@@ -31,7 +33,7 @@
             <span class="app-date" id="current-date-display">Today</span>
             <button type="button" class="sql-status-badge" id="sql-status-badge" title="Click to view SQL database sync status">
               <span class="sql-status-dot"></span>
-              <span id="sql-status-text">Checking SQL...</span>
+              <span id="sql-status-text">Checking Database...</span>
             </button>
           </div>
         </div>
@@ -54,9 +56,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         </button>
 
-        <!-- Data / SQL Settings -->
-        <button type="button" class="icon-btn" id="data-btn" data-tooltip="SQL & Backup" aria-label="Backup">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <!-- Data / Cloud SQL Settings -->
+        <button type="button" class="icon-btn" id="data-btn" data-tooltip="Cloud SQL & Sync" aria-label="Cloud SQL Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
         </button>
 
         <!-- Theme Toggle -->
@@ -302,11 +304,11 @@
         <span>•</span>
         <button type="button" class="footer-link" id="footer-pomodoro-btn">Pomodoro Timer</button>
         <span>•</span>
-        <button type="button" class="footer-link" id="footer-backup-btn">SQL & Backup</button>
+        <button type="button" class="footer-link" id="footer-backup-btn">Cloud SQL & Sync</button>
         <span>•</span>
         <button type="button" class="footer-link" id="footer-reset-btn">Reset Sample Tasks</button>
       </div>
-      <p>TaskFlow Pro — Powered by Relational SQL & Deep Focus Engine.</p>
+      <p>TaskFlow Pro — Powered by Cloud Relational SQL & Deep Focus Engine.</p>
     </footer>
   </div>
 
@@ -498,27 +500,45 @@
     </div>
   </dialog>
 
-  <!-- Data, SQL & Export Modal -->
+  <!-- Cloud Database, SQL & Export Modal -->
   <dialog id="data-dialog">
-    <div class="modal-card">
-      <div class="modal-header"><h3 class="modal-title">SQL Database & Backup</h3><button type="button" class="modal-close-btn" id="data-close-btn">✕</button></div>
+    <div class="modal-card" style="width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+          <span>Cloud SQL Database & Sync</span>
+        </h3>
+        <button type="button" class="modal-close-btn" id="data-close-btn">✕</button>
+      </div>
       <div class="modal-body">
-        <!-- SQL Server Config -->
-        <div class="server-config-box">
-          <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">SQL Backend API Server URL</span>
-          <div style="display: flex; gap: 0.5rem;">
-            <input type="text" id="api-server-url-input" class="form-control" placeholder="http://localhost:5000" style="flex:1; font-size: 0.85rem;">
-            <button type="button" class="btn-primary" id="save-server-url-btn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Save & Connect</button>
+        <!-- Supabase Free Cloud PostgreSQL -->
+        <div class="server-config-box" style="border: 1px solid rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.04);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: var(--primary); font-size: 0.88rem;">⚡ 24/7 Cloud Database (Supabase PostgreSQL)</strong>
+            <span class="badge badge-priority-high" style="font-size: 0.65rem;">Recommended</span>
           </div>
-          <span style="font-size: 0.74rem; color: var(--text-muted);">Points to your local Node.js SQL server or deployed cloud API.</span>
+          <p style="font-size: 0.76rem; color: var(--text-muted); margin: 2px 0;">
+            Connect free Supabase PostgreSQL to sync tasks across all laptops, phones, and browsers 24/7 worldwide!
+          </p>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.3rem;">
+            <input type="text" id="supabase-url-input" class="form-control" placeholder="Supabase Project URL (e.g. https://xyz.supabase.co)" style="font-size: 0.8rem;">
+            <input type="password" id="supabase-key-input" class="form-control" placeholder="Supabase Anon Public API Key" style="font-size: 0.8rem;">
+            <button type="button" class="btn-primary" id="save-supabase-btn" style="padding: 0.45rem; font-size: 0.82rem;">Connect Cloud Database</button>
+          </div>
         </div>
 
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.3rem;">
-          Your data is synchronized with your SQL database account and cached locally for offline resilience.
-        </p>
+        <!-- Node.js Local / Custom Server API -->
+        <div class="server-config-box" style="margin-top: 0.75rem;">
+          <strong style="font-size: 0.82rem; color: var(--text-primary);">💻 Local / Custom Backend Server URL</strong>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.2rem;">
+            <input type="text" id="api-server-url-input" class="form-control" placeholder="http://localhost:5000" style="flex:1; font-size: 0.82rem;">
+            <button type="button" class="btn-secondary" id="save-server-url-btn" style="padding: 0.4rem 0.8rem; font-size: 0.78rem;">Connect</button>
+          </div>
+        </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 0.3rem;">
-          <button type="button" class="btn-primary" id="export-json-btn" style="width: 100%;">Export Backup (JSON)</button>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem;">
+          <button type="button" class="btn-secondary" id="export-json-btn" style="width: 100%;">Export Backup (JSON)</button>
           <button type="button" class="btn-secondary" id="export-csv-btn" style="width: 100%;">Export Spreadsheet (CSV)</button>
           <label class="btn-secondary" style="width: 100%; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
             Import Tasks from Backup
