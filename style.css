@@ -957,3 +957,20 @@ textarea.form-control { min-height: 80px; resize: vertical; }
   width: 16px;
   height: 16px;
 }
+
+.auth-reset-link {
+  display: block;
+  margin-top: 0.4rem;
+  background: none;
+  border: none;
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 0;
+  text-align: left;
+}
+.auth-reset-link:hover {
+  color: #1e40af;
+}

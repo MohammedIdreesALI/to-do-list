@@ -1,11 +1,11 @@
 
 /**
  * TASKFLOW PRO - Modern Multi-User Task & Productivity Platform
- * Instant Deterministic Auth & Ultra Responsive Productivity Engine
+ * Instant Fast Multi-User Auth & Seamless Password Recovery
  */
 
 // ==========================================================================
-// 1. Authentication Manager (Instant Deterministic Auth)
+// 1. Authentication Manager (Instant Fast Multi-User Auth)
 // ==========================================================================
 const AUTH_STORAGE_KEYS = {
   USERS_DB: 'taskflow_users_db_v1',
@@ -83,7 +83,7 @@ class AuthManager {
 
     let user;
     if (existingIndex !== -1) {
-      // Account exists, update credentials and log in
+      // Account exists, update credentials and log in seamlessly
       user = users[existingIndex];
       user.name = name.trim();
       user.passwordHash = passwordHash;
@@ -109,16 +109,48 @@ class AuthManager {
     return user;
   }
 
+  static resetPasswordAndLogin(email, newPassword) {
+    const cleanEmail = email.trim().toLowerCase();
+    const users = this.getUsers();
+    let user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const passwordHash = this.hashPassword(newPassword);
+
+    if (user) {
+      user.passwordHash = passwordHash;
+    } else {
+      const name = cleanEmail.split('@')[0];
+      user = {
+        id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        email: cleanEmail,
+        passwordHash,
+        createdAt: Date.now()
+      };
+      users.push(user);
+    }
+
+    localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
+    this.setActiveSession(user);
+
+    if (!localStorage.getItem(`taskflow_tasks_${user.id}`)) {
+      StorageManager.saveTasksForUser(user.id, DEFAULT_TASKS);
+    }
+    return user;
+  }
+
   static signIn(email, password) {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) throw new Error('Please enter your email.');
     if (!password) throw new Error('Please enter your password.');
 
     const users = this.getUsers();
-    const user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    let user = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
-      throw new Error('Account not found. Click "Create Account" tab to register!');
+      // Auto-create on new device if user enters new email & password
+      const name = cleanEmail.split('@')[0];
+      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+      return this.signUp(formattedName, cleanEmail, password);
     }
 
     const inputHash = this.hashPassword(password);
@@ -128,7 +160,7 @@ class AuthManager {
       (password === 'password123' && user.email === 'demo@taskflow.pro');
 
     if (!isPasswordValid) {
-      throw new Error('Incorrect password. Please try again or create a new account.');
+      throw new Error('INCORRECT_PASSWORD');
     }
 
     if (user.passwordHash !== inputHash) {
@@ -996,7 +1028,23 @@ class UIManager {
         this.authDialog.close();
         this.onAuthChange(`Welcome back, ${user.name}!`);
       } catch (err) {
-        this.showAuthError(err.message);
+        if (err.message === 'INCORRECT_PASSWORD') {
+          this.authErrorMessage.innerHTML = `
+            <span>Incorrect password for this account.</span>
+            <button type="button" class="auth-reset-link" id="auth-reset-trigger-btn">Reset Password to "${this.escapeHTML(pass)}" & Sign In</button>
+          `;
+          this.authErrorMessage.classList.add('visible');
+          const resetBtn = document.getElementById('auth-reset-trigger-btn');
+          if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+              const u = AuthManager.resetPasswordAndLogin(email, pass);
+              this.authDialog.close();
+              this.onAuthChange(`Password updated! Welcome, ${u.name}!`);
+            });
+          }
+        } else {
+          this.showAuthError(err.message);
+        }
       }
     });
 
