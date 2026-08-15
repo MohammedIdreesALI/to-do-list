@@ -1,11 +1,11 @@
 
 /**
  * TASKFLOW PRO - Modern Multi-User Task & Productivity Platform
- * Instant Fast Multi-User Auth & Seamless Password Recovery
+ * Version 3.0.0 — Zero-Friction Instant Authentication & Focus Platform
  */
 
 // ==========================================================================
-// 1. Authentication Manager (Instant Fast Multi-User Auth)
+// 1. Authentication Manager (Zero-Friction Fast Multi-User Auth)
 // ==========================================================================
 const AUTH_STORAGE_KEYS = {
   USERS_DB: 'taskflow_users_db_v1',
@@ -75,7 +75,7 @@ class AuthManager {
     const cleanEmail = email.trim().toLowerCase();
     if (!name.trim()) throw new Error('Please enter your name.');
     if (!cleanEmail) throw new Error('Please enter a valid email.');
-    if (!password || password.length < 4) throw new Error('Password must be at least 4 characters.');
+    if (!password) throw new Error('Please enter a password.');
 
     const users = this.getUsers();
     const existingIndex = users.findIndex(u => u.email.toLowerCase() === cleanEmail);
@@ -109,35 +109,6 @@ class AuthManager {
     return user;
   }
 
-  static resetPasswordAndLogin(email, newPassword) {
-    const cleanEmail = email.trim().toLowerCase();
-    const users = this.getUsers();
-    let user = users.find(u => u.email.toLowerCase() === cleanEmail);
-    const passwordHash = this.hashPassword(newPassword);
-
-    if (user) {
-      user.passwordHash = passwordHash;
-    } else {
-      const name = cleanEmail.split('@')[0];
-      user = {
-        id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        email: cleanEmail,
-        passwordHash,
-        createdAt: Date.now()
-      };
-      users.push(user);
-    }
-
-    localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
-    this.setActiveSession(user);
-
-    if (!localStorage.getItem(`taskflow_tasks_${user.id}`)) {
-      StorageManager.saveTasksForUser(user.id, DEFAULT_TASKS);
-    }
-    return user;
-  }
-
   static signIn(email, password) {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) throw new Error('Please enter your email.');
@@ -145,30 +116,23 @@ class AuthManager {
 
     const users = this.getUsers();
     let user = users.find(u => u.email.toLowerCase() === cleanEmail);
+    const inputHash = this.hashPassword(password);
 
     if (!user) {
-      // Auto-create on new device if user enters new email & password
-      const name = cleanEmail.split('@')[0];
-      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+      // Auto-create on any new device seamlessly
+      const rawName = cleanEmail.split('@')[0];
+      const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
       return this.signUp(formattedName, cleanEmail, password);
     }
 
-    const inputHash = this.hashPassword(password);
-    const isPasswordValid = 
-      user.passwordHash === inputHash ||
-      user.passwordHash === 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f' ||
-      (password === 'password123' && user.email === 'demo@taskflow.pro');
-
-    if (!isPasswordValid) {
-      throw new Error('INCORRECT_PASSWORD');
-    }
-
-    if (user.passwordHash !== inputHash) {
-      user.passwordHash = inputHash;
-      localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
-    }
-
+    // Always accept the password and update hash to current session
+    user.passwordHash = inputHash;
+    localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
     this.setActiveSession(user);
+
+    if (!localStorage.getItem(`taskflow_tasks_${user.id}`)) {
+      StorageManager.saveTasksForUser(user.id, DEFAULT_TASKS);
+    }
     return user;
   }
 
@@ -1026,25 +990,9 @@ class UIManager {
       try {
         const user = AuthManager.signIn(email, pass);
         this.authDialog.close();
-        this.onAuthChange(`Welcome back, ${user.name}!`);
+        this.onAuthChange(`Welcome, ${user.name}!`);
       } catch (err) {
-        if (err.message === 'INCORRECT_PASSWORD') {
-          this.authErrorMessage.innerHTML = `
-            <span>Incorrect password for this account.</span>
-            <button type="button" class="auth-reset-link" id="auth-reset-trigger-btn">Reset Password to "${this.escapeHTML(pass)}" & Sign In</button>
-          `;
-          this.authErrorMessage.classList.add('visible');
-          const resetBtn = document.getElementById('auth-reset-trigger-btn');
-          if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-              const u = AuthManager.resetPasswordAndLogin(email, pass);
-              this.authDialog.close();
-              this.onAuthChange(`Password updated! Welcome, ${u.name}!`);
-            });
-          }
-        } else {
-          this.showAuthError(err.message);
-        }
+        this.showAuthError(err.message);
       }
     });
 
@@ -1058,7 +1006,7 @@ class UIManager {
         const user = AuthManager.signUp(name, email, pass);
         this.authDialog.close();
         ConfettiEngine.fire(70);
-        this.onAuthChange(`Account created! Welcome, ${user.name}!`);
+        this.onAuthChange(`Account active! Welcome, ${user.name}!`);
       } catch (err) {
         this.showAuthError(err.message);
       }
