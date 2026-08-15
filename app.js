@@ -1,83 +1,11 @@
 
 /**
  * TASKFLOW PRO - Modern Multi-User Task & Productivity Platform
- * With Zero-Config Invisible Cloud Sync Engine (Cross-Device Worldwide)
+ * Instant Fast Multi-User Auth & High Performance Productivity Engine
  */
 
 // ==========================================================================
-// 1. Invisible Global Cloud Sync Engine
-// ==========================================================================
-class CloudSyncEngine {
-  // Built-in resilient global cloud endpoint
-  static CLOUD_ENDPOINT = 'https://taskflow-pro-cloud-default-rtdb.firebaseio.com';
-
-  static getAccountKey(email) {
-    let hash = 0;
-    const str = email.trim().toLowerCase();
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash) + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return 'acc_' + Math.abs(hash).toString(16) + '_' + str.replace(/[^a-z0-9]/g, '_').substring(0, 16);
-  }
-
-  static async registerCloud(user, initialData = {}) {
-    const key = this.getAccountKey(user.email);
-    const payload = {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        passwordHash: user.passwordHash,
-        createdAt: user.createdAt || Date.now()
-      },
-      data: initialData
-    };
-
-    try {
-      const res = await fetch(`${this.CLOUD_ENDPOINT}/accounts/${key}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      return res.ok;
-    } catch (e) {
-      console.warn('Cloud sync offline:', e.message);
-      return false;
-    }
-  }
-
-  static async fetchCloudAccount(email) {
-    const key = this.getAccountKey(email);
-    try {
-      const res = await fetch(`${this.CLOUD_ENDPOINT}/accounts/${key}.json`, {
-        cache: 'no-store'
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data;
-    } catch (e) {
-      console.warn('Cloud fetch offline:', e.message);
-      return null;
-    }
-  }
-
-  static async syncUserData(userId, email, data) {
-    if (!email || email === 'guest@local.browser') return;
-    const key = this.getAccountKey(email);
-
-    try {
-      await fetch(`${this.CLOUD_ENDPOINT}/accounts/${key}/data.json`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } catch (e) {}
-  }
-}
-
-// ==========================================================================
-// 2. Authentication Manager (Zero-Config Global Cloud Auth)
+// 1. Authentication Manager (Instant Multi-User Auth)
 // ==========================================================================
 const AUTH_STORAGE_KEYS = {
   USERS_DB: 'taskflow_users_db_v1',
@@ -149,8 +77,17 @@ class AuthManager {
 
   static async signUp(name, email, password) {
     const cleanEmail = email.trim().toLowerCase();
-    const passwordHash = await this.hashPassword(password);
+    if (!name.trim()) throw new Error('Please enter your name.');
+    if (!cleanEmail) throw new Error('Please enter a valid email.');
+    if (!password || password.length < 6) throw new Error('Password must be at least 6 characters.');
 
+    const users = this.getUsers();
+    const existing = users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      throw new Error('An account with this email already exists. Please Sign In.');
+    }
+
+    const passwordHash = await this.hashPassword(password);
     const newUser = {
       id: 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       name: name.trim(),
@@ -159,64 +96,30 @@ class AuthManager {
       createdAt: Date.now()
     };
 
-    // 1. Check if account already exists in Cloud
-    const existingCloud = await CloudSyncEngine.fetchCloudAccount(cleanEmail);
-    if (existingCloud && existingCloud.user) {
-      throw new Error('An account with this email already exists in the cloud. Please Sign In.');
-    }
-
-    // 2. Register in Global Cloud
-    const defaultData = {
-      tasks: DEFAULT_TASKS,
-      stats: { xp: 40, streakCount: 1, lastActiveDate: new Date().toISOString().split('T')[0], theme: 'light', soundEnabled: true },
-      categories: ['work', 'personal', 'health', 'finance', 'learning', 'urgent']
-    };
-
-    CloudSyncEngine.registerCloud(newUser, defaultData).catch(() => {});
-
-    // 3. Cache in Local Storage
-    const users = this.getUsers();
     users.push(newUser);
     localStorage.setItem(AUTH_STORAGE_KEYS.USERS_DB, JSON.stringify(users));
     this.setActiveSession(newUser);
-    StorageManager.applyRemoteData(newUser.id, defaultData);
+
+    // Initialize user with sample starter tasks
+    StorageManager.saveTasksForUser(newUser.id, DEFAULT_TASKS);
     return newUser;
   }
 
   static async signIn(email, password) {
     const cleanEmail = email.trim().toLowerCase();
-    const passwordHash = await this.hashPassword(password);
+    if (!cleanEmail) throw new Error('Please enter your email.');
+    if (!password) throw new Error('Please enter your password.');
 
-    // 1. Try Global Cloud Sign In first (Works across any device worldwide!)
-    try {
-      const cloudRecord = await CloudSyncEngine.fetchCloudAccount(cleanEmail);
-      if (cloudRecord && cloudRecord.user) {
-        if (cloudRecord.user.passwordHash === passwordHash || password === 'password123') {
-          const user = cloudRecord.user;
-          this.setActiveSession(user);
-          if (cloudRecord.data) {
-            StorageManager.applyRemoteData(user.id, cloudRecord.data);
-          }
-          return user;
-        } else {
-          throw new Error('Incorrect password.');
-        }
-      }
-    } catch (err) {
-      if (err.message === 'Incorrect password.') throw err;
-      console.warn('Cloud sign-in unreachable, checking local cache:', err.message);
-    }
-
-    // 2. Local Cache Fallback
     const users = this.getUsers();
     const user = users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (!user) {
-      throw new Error('Account not found. Please Sign Up to create your account.');
+      throw new Error('Account not found. Click "Create Account" tab above to sign up.');
     }
 
+    const passwordHash = await this.hashPassword(password);
     if (user.passwordHash !== passwordHash && password !== 'password123') {
-      throw new Error('Incorrect password.');
+      throw new Error('Incorrect password. Please try again.');
     }
 
     this.setActiveSession(user);
@@ -233,7 +136,7 @@ class AuthManager {
 }
 
 // ==========================================================================
-// 3. Storage Manager (Namespaced Local Cache + Cloud Sync)
+// 2. Storage Manager (User-Isolated Storage)
 // ==========================================================================
 const DEFAULT_TASKS = [
   {
@@ -325,32 +228,13 @@ class StorageManager {
     try {
       const key = this.getUserKey('taskflow_tasks');
       localStorage.setItem(key, JSON.stringify(tasks));
-      const user = AuthManager.getActiveUser();
-      if (user && !user.isGuest) {
-        CloudSyncEngine.syncUserData(user.id, user.email, { tasks }).catch(() => {});
-      }
     } catch (e) {}
   }
 
-  static applyRemoteData(userId, data) {
-    if (!data) return;
-    if (data.tasks) {
-      localStorage.setItem(`taskflow_tasks_${userId}`, JSON.stringify(data.tasks));
-    }
-    if (data.stats) {
-      if (data.stats.xp !== undefined) localStorage.setItem(`taskflow_xp_${userId}`, String(data.stats.xp));
-      if (data.stats.streakCount !== undefined) {
-        localStorage.setItem(`taskflow_streak_${userId}`, JSON.stringify({
-          count: data.stats.streakCount,
-          lastActiveDate: data.stats.lastActiveDate || new Date().toISOString().split('T')[0]
-        }));
-      }
-      if (data.stats.theme) localStorage.setItem(`taskflow_theme_${userId}`, data.stats.theme);
-      if (data.stats.soundEnabled !== undefined) localStorage.setItem(`taskflow_sound_${userId}`, String(data.stats.soundEnabled));
-    }
-    if (data.categories) {
-      localStorage.setItem(`taskflow_categories_${userId}`, JSON.stringify(data.categories));
-    }
+  static saveTasksForUser(userId, tasks) {
+    try {
+      localStorage.setItem(`taskflow_tasks_${userId}`, JSON.stringify(tasks));
+    } catch (e) {}
   }
 
   static getTheme() {
@@ -358,10 +242,6 @@ class StorageManager {
   }
   static setTheme(theme) {
     localStorage.setItem(this.getUserKey('taskflow_theme'), theme);
-    const user = AuthManager.getActiveUser();
-    if (user && !user.isGuest) {
-      CloudSyncEngine.syncUserData(user.id, user.email, { stats: { theme } }).catch(() => {});
-    }
   }
 
   static isSoundEnabled() {
@@ -370,10 +250,6 @@ class StorageManager {
   }
   static setSoundEnabled(enabled) {
     localStorage.setItem(this.getUserKey('taskflow_sound'), String(enabled));
-    const user = AuthManager.getActiveUser();
-    if (user && !user.isGuest) {
-      CloudSyncEngine.syncUserData(user.id, user.email, { stats: { soundEnabled: enabled } }).catch(() => {});
-    }
   }
 
   static getXP() {
@@ -381,10 +257,6 @@ class StorageManager {
   }
   static setXP(xp) {
     localStorage.setItem(this.getUserKey('taskflow_xp'), String(xp));
-    const user = AuthManager.getActiveUser();
-    if (user && !user.isGuest) {
-      CloudSyncEngine.syncUserData(user.id, user.email, { stats: { xp } }).catch(() => {});
-    }
   }
 
   static getStreakData() {
@@ -400,10 +272,6 @@ class StorageManager {
   }
   static setStreakData(data) {
     localStorage.setItem(this.getUserKey('taskflow_streak'), JSON.stringify(data));
-    const user = AuthManager.getActiveUser();
-    if (user && !user.isGuest) {
-      CloudSyncEngine.syncUserData(user.id, user.email, { stats: { streakCount: data.count, lastActiveDate: data.lastActiveDate } }).catch(() => {});
-    }
   }
 
   static getCustomCategories() {
@@ -413,10 +281,6 @@ class StorageManager {
   }
   static saveCustomCategories(cats) {
     localStorage.setItem(this.getUserKey('taskflow_categories'), JSON.stringify(cats));
-    const user = AuthManager.getActiveUser();
-    if (user && !user.isGuest) {
-      CloudSyncEngine.syncUserData(user.id, user.email, { categories: cats }).catch(() => {});
-    }
   }
 
   static getViewMode() {
@@ -428,7 +292,7 @@ class StorageManager {
 }
 
 // ==========================================================================
-// 4. Confetti Engine & Web Audio & Gamification
+// 3. Confetti Engine & Web Audio & Gamification
 // ==========================================================================
 class ConfettiEngine {
   static canvas = null;
@@ -650,7 +514,7 @@ class GamificationManager {
 }
 
 // ==========================================================================
-// 5. Application State (With Automatic Cloud Sync)
+// 4. Application State
 // ==========================================================================
 class AppState {
   constructor() {
@@ -670,21 +534,6 @@ class AppState {
     this.tasks = StorageManager.getTasks();
     this.customCategories = StorageManager.getCustomCategories();
     this.viewMode = StorageManager.getViewMode();
-  }
-
-  async syncWithCloud() {
-    const user = AuthManager.getActiveUser();
-    if (!user || user.isGuest) return false;
-
-    try {
-      const cloudRecord = await CloudSyncEngine.fetchCloudAccount(user.email);
-      if (cloudRecord && cloudRecord.data) {
-        StorageManager.applyRemoteData(user.id, cloudRecord.data);
-        this.reloadUserData();
-        return true;
-      }
-    } catch (e) {}
-    return false;
   }
 
   addTask(data) {
@@ -889,7 +738,7 @@ class AppState {
 }
 
 // ==========================================================================
-// 6. UI Manager & Multi-User Controller
+// 5. UI Manager & Controller
 // ==========================================================================
 class UIManager {
   constructor(appState) {
@@ -905,14 +754,6 @@ class UIManager {
     this.bindEvents();
     this.switchView(this.state.viewMode);
     this.render();
-
-    // Initial background cloud sync
-    this.state.syncWithCloud().then(synced => {
-      if (synced) {
-        this.initGamification();
-        this.render();
-      }
-    });
   }
 
   initDOMElements() {
@@ -920,6 +761,8 @@ class UIManager {
     this.sqlStatusBadge = document.getElementById('sql-status-badge');
     this.sqlStatusText = document.getElementById('sql-status-text');
 
+    this.headerAuthBtn = document.getElementById('header-auth-btn');
+    this.userProfileWrap = document.getElementById('user-profile-wrap');
     this.userProfileBtn = document.getElementById('user-profile-btn');
     this.userAvatarInitials = document.getElementById('user-avatar-initials');
     this.userNameDisplay = document.getElementById('user-name-display');
@@ -1072,6 +915,14 @@ class UIManager {
   initAuth() {
     this.updateUserUI();
 
+    // 1. Prominent Header Sign In Button (when guest)
+    if (this.headerAuthBtn) {
+      this.headerAuthBtn.addEventListener('click', () => {
+        this.openAuthModal('signin');
+      });
+    }
+
+    // 2. User Avatar Pill (when logged in)
     this.userProfileBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       this.userDropdownMenu.classList.toggle('active');
@@ -1081,12 +932,9 @@ class UIManager {
       this.userDropdownMenu.classList.remove('active');
     });
 
+    // 3. Dropdown items
     this.dropdownSignInBtn.addEventListener('click', () => {
       this.userDropdownMenu.classList.remove('active');
-      this.openAuthModal('signin');
-    });
-
-    this.footerAuthBtn.addEventListener('click', () => {
       this.openAuthModal('signin');
     });
 
@@ -1096,8 +944,16 @@ class UIManager {
       this.onAuthChange('Signed out. Switched to Guest mode.');
     });
 
+    // 4. Footer link
+    this.footerAuthBtn.addEventListener('click', () => {
+      this.openAuthModal('signin');
+    });
+
+    // 5. Auth Modal tab toggles
     this.authTabSignIn.addEventListener('click', () => this.switchAuthTab('signin'));
     this.authTabSignUp.addEventListener('click', () => this.switchAuthTab('signup'));
+
+    // 6. Modal close buttons
     this.authCloseBtn.addEventListener('click', () => this.authDialog.close());
     this.authCancelBtn.addEventListener('click', () => this.authDialog.close());
     this.authGuestBtn.addEventListener('click', () => {
@@ -1106,23 +962,25 @@ class UIManager {
       this.onAuthChange('Continuing as Guest');
     });
 
+    // 7. Quick Demo Login Button
     this.quickDemoLoginBtn.addEventListener('click', () => {
       this.signInEmailInput.value = 'demo@taskflow.pro';
       this.signInPasswordInput.value = 'password123';
       this.signInEmailInput.focus();
     });
 
+    // 8. Password reveal toggles
     document.querySelectorAll('.password-toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const targetId = btn.getAttribute('data-target');
         const input = document.getElementById(targetId);
         if (input) {
-          const isPass = input.type === 'password';
-          input.type = isPass ? 'text' : 'password';
+          input.type = input.type === 'password' ? 'text' : 'password';
         }
       });
     });
 
+    // 9. Sign In Form Submit
     this.signInForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       this.hideAuthError();
@@ -1137,6 +995,7 @@ class UIManager {
       }
     });
 
+    // 10. Sign Up Form Submit
     this.signUpForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       this.hideAuthError();
@@ -1157,6 +1016,11 @@ class UIManager {
   openAuthModal(tab = 'signin') {
     this.hideAuthError();
     this.switchAuthTab(tab);
+    if (tab === 'signin') {
+      this.signInEmailInput.focus();
+    } else {
+      this.signUpNameInput.focus();
+    }
     this.authDialog.showModal();
   }
 
@@ -1182,14 +1046,24 @@ class UIManager {
     const user = AuthManager.getActiveUser();
     const isGuest = !user || !!user.isGuest;
 
-    const initials = user && user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'G';
-    this.userAvatarInitials.textContent = initials;
-    this.userNameDisplay.textContent = user && user.name ? user.name.split(' ')[0] : 'Guest';
-
-    this.dropdownUserName.textContent = user ? user.name : 'Guest User';
-    this.dropdownUserEmail.textContent = user ? user.email : 'guest@local.browser';
-    this.dropdownSignOutBtn.style.display = isGuest ? 'none' : 'flex';
-    this.dropdownSignInBtn.querySelector('span').textContent = isGuest ? 'Sign In / Register' : 'Switch Account';
+    if (isGuest) {
+      if (this.headerAuthBtn) this.headerAuthBtn.style.display = 'flex';
+      if (this.userProfileWrap) this.userProfileWrap.style.display = 'none';
+      this.dropdownUserName.textContent = 'Guest User';
+      this.dropdownUserEmail.textContent = 'guest@local.browser';
+      this.dropdownSignOutBtn.style.display = 'none';
+      this.dropdownSignInBtn.querySelector('span').textContent = 'Sign In / Register';
+    } else {
+      if (this.headerAuthBtn) this.headerAuthBtn.style.display = 'none';
+      if (this.userProfileWrap) this.userProfileWrap.style.display = 'block';
+      const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
+      this.userAvatarInitials.textContent = initials;
+      this.userNameDisplay.textContent = user.name ? user.name.split(' ')[0] : 'User';
+      this.dropdownUserName.textContent = user.name;
+      this.dropdownUserEmail.textContent = user.email;
+      this.dropdownSignOutBtn.style.display = 'flex';
+      this.dropdownSignInBtn.querySelector('span').textContent = 'Switch Account';
+    }
   }
 
   onAuthChange(toastMessage) {
@@ -1197,14 +1071,6 @@ class UIManager {
     this.state.reloadUserData();
     this.initGamification();
     this.render();
-
-    this.state.syncWithCloud().then(synced => {
-      if (synced) {
-        this.initGamification();
-        this.render();
-      }
-    });
-
     if (toastMessage) this.showToast(toastMessage);
   }
 
@@ -1523,7 +1389,7 @@ class UIManager {
       this.updateXPUI(GamificationManager.getLevelInfo(StorageManager.getXP()));
 
       this.render();
-      this.showToast('Task added (+10 XP) • Synced');
+      this.showToast('Task added (+10 XP)');
     });
 
     this.toggleSubtaskCreatorBtn.addEventListener('click', () => {
@@ -1618,7 +1484,7 @@ class UIManager {
 
       this.editDialog.close();
       this.render();
-      this.showToast('Task updated • Synced');
+      this.showToast('Task updated');
     });
 
     this.setupKanbanDropZones();
@@ -2147,7 +2013,7 @@ class UIManager {
 }
 
 // ==========================================================================
-// 7. App Bootstrap
+// 6. App Bootstrap
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   ConfettiEngine.init();

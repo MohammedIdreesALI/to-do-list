@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="TaskFlow Pro — Modern task manager with automatic Cloud sync, multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
+  <meta name="description" content="TaskFlow Pro — Modern task manager with instant multi-user login, Kanban boards, Eisenhower Matrix, Pomodoro timer, speech recognition, and gamified productivity.">
   <title>TaskFlow Pro — Master Your Day</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,9 +29,9 @@
           <h1>TaskFlow <span class="brand-pro-badge">PRO</span></h1>
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 2px;">
             <span class="app-date" id="current-date-display">Today</span>
-            <div class="sql-status-badge online" id="sql-status-badge" title="Automatic Cloud Sync is Active">
+            <div class="sql-status-badge online" id="sql-status-badge" title="Live Database Active">
               <span class="sql-status-dot"></span>
-              <span id="sql-status-text">Cloud Sync Active</span>
+              <span id="sql-status-text">Cloud Sync Ready</span>
             </div>
           </div>
         </div>
@@ -65,23 +65,29 @@
           <svg id="theme-sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         </button>
 
-        <!-- User Profile Pill & Dropdown -->
-        <div class="user-profile-wrap">
+        <!-- Direct Sign In / Register Header Button (for Guest) -->
+        <button type="button" class="btn-primary auth-header-btn" id="header-auth-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+          <span>Sign In / Register</span>
+        </button>
+
+        <!-- User Profile Pill & Dropdown (When Logged In) -->
+        <div class="user-profile-wrap" id="user-profile-wrap" style="display: none;">
           <button type="button" class="user-avatar-btn" id="user-profile-btn" aria-label="User Account">
-            <span class="avatar-circle" id="user-avatar-initials">G</span>
-            <span class="user-name-label" id="user-name-display">Guest</span>
+            <span class="avatar-circle" id="user-avatar-initials">A</span>
+            <span class="user-name-label" id="user-name-display">Alex</span>
           </button>
 
           <div class="user-dropdown-menu" id="user-dropdown-menu">
             <div class="dropdown-user-header">
-              <span class="dropdown-user-name" id="dropdown-user-name">Guest User</span>
-              <span class="dropdown-user-email" id="dropdown-user-email">guest@local.browser</span>
+              <span class="dropdown-user-name" id="dropdown-user-name">Alex Morgan</span>
+              <span class="dropdown-user-email" id="dropdown-user-email">demo@taskflow.pro</span>
             </div>
             <button type="button" class="dropdown-menu-item" id="dropdown-signin-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-              <span>Sign In / Switch Account</span>
+              <span>Switch Account</span>
             </button>
-            <button type="button" class="dropdown-menu-item danger" id="dropdown-signout-btn" style="display:none;">
+            <button type="button" class="dropdown-menu-item danger" id="dropdown-signout-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               <span>Sign Out</span>
             </button>
@@ -296,7 +302,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-links">
-        <button type="button" class="footer-link" id="footer-auth-btn">Account Login</button>
+        <button type="button" class="footer-link" id="footer-auth-btn">Account Login / Register</button>
         <span>•</span>
         <button type="button" class="footer-link" id="footer-shortcuts-btn">Keyboard Shortcuts</button>
         <span>•</span>
@@ -310,7 +316,7 @@
     </footer>
   </div>
 
-  <!-- Auth Dialog -->
+  <!-- Auth Dialog (Sign In / Register) -->
   <dialog id="auth-dialog">
     <div class="modal-card" style="width: 440px;">
       <div class="modal-header">
@@ -354,7 +360,7 @@
             <button type="button" class="btn-demo-quick" id="quick-demo-login-btn">1-Click Fill</button>
           </div>
 
-          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">Sign In</button>
+          <button type="submit" class="btn-primary" id="signin-submit-btn" style="width: 100%; margin-top: 0.5rem;">Sign In</button>
         </form>
 
         <!-- Sign Up Form -->
@@ -374,12 +380,12 @@
             <div class="password-input-wrap">
               <input type="password" id="signup-password" class="form-control" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password">
               <button type="button" class="password-toggle-btn" data-target="signup-password" aria-label="Toggle password">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
           </div>
 
-          <button type="submit" class="btn-primary" style="width: 100%; margin-top: 0.5rem;">Create Account</button>
+          <button type="submit" class="btn-primary" id="signup-submit-btn" style="width: 100%; margin-top: 0.5rem;">Create Account</button>
         </form>
       </div>
 
